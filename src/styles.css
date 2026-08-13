@@ -1,0 +1,587 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #1a1a1a;
+  color: #e0e0e0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.app {
+  display: flex;
+  height: 100vh;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 300px;
+  min-width: 300px;
+  background: #2d2d2d;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  border-right: 1px solid #404040;
+  overflow-y: auto;
+}
+
+.sidebar h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.sidebar h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #aaa;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dimension-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.input-group label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #999;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.input-group input {
+  background: #1a1a1a;
+  border: 1px solid #555;
+  border-radius: 6px;
+  color: #e0e0e0;
+  padding: 6px 4px;
+  font-size: 16px;
+  font-weight: 700;
+  outline: none;
+  transition: border-color 0.2s;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Hide number input spinners */
+.input-group input::-webkit-outer-spin-button,
+.input-group input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.input-group input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+.input-group input:focus {
+  border-color: #5b9bd5;
+}
+
+.add-rect-group {
+  display: flex;
+  gap: 8px;
+}
+
+.name-input {
+  flex: 1;
+  background: #1a1a1a;
+  border: 1px solid #555;
+  border-radius: 6px;
+  color: #e0e0e0;
+  padding: 6px 8px;
+  font-size: 16px;
+  font-weight: 700;
+  outline: none;
+  transition: border-color 0.2s;
+  min-width: 0;
+}
+
+.name-input:focus {
+  border-color: #5b9bd5;
+}
+
+.name-input::placeholder {
+  color: #666;
+}
+
+.btn-add {
+  background: #5b9bd5;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 10px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.btn-add:hover {
+  background: #4a8bc4;
+}
+
+.btn-add:disabled {
+  background: #555;
+  cursor: not-allowed;
+}
+
+/* Rectangle list */
+.rectangle-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.rectangle-item {
+  background: #1a1a1a;
+  border: 1px solid #404040;
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.rectangle-item:hover {
+  border-color: #5b9bd5;
+}
+
+.rectangle-item.active {
+  border-color: #5b9bd5;
+  background: #252540;
+}
+
+.rectangle-item .rect-color-indicator {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-right: 8px;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.rectangle-item .rect-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.rectangle-item .rect-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rectangle-item .rect-name-input {
+  background: #2d2d2d;
+  border: 1px solid #5b9bd5;
+  border-radius: 3px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 1px 4px;
+  width: 100%;
+  outline: none;
+}
+
+.rectangle-item .rect-dims {
+  font-size: 14px;
+  font-weight: 700;
+  color: #888;
+}
+
+.rectangle-item .rect-constraints {
+  font-size: 13px;
+  font-weight: 700;
+  color: #555;
+}
+
+.rectangle-item .rect-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: 6px;
+}
+
+.rectangle-item .btn-action {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.rectangle-item .btn-action:hover {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.1);
+}
+
+.rectangle-item .btn-rotate-btn:hover {
+  color: #5b9bd5;
+  background: rgba(91, 155, 213, 0.1);
+}
+
+/* File action buttons */
+.file-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-file {
+  flex: 1;
+  background: #7a7a7a;
+  color: #1a1a1a;
+  border: 1px solid #999;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.btn-file:hover {
+  background: #555;
+  color: #fff;
+  border-color: #888;
+}
+
+/* Canvas area */
+.canvas-area {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #111;
+  overflow: hidden;
+  position: relative;
+}
+
+.canvas {
+  position: relative;
+  width: 90%;
+  height: 90%;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+  cursor: grab;
+}
+
+.canvas.panning {
+  cursor: grabbing;
+}
+
+.grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.rectangles-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* SVG rectangles */
+.rectangles-layer rect.rect-shape {
+  fill: rgba(91, 155, 213, 0.15);
+  stroke: #5b9bd5;
+  stroke-width: 2;
+  cursor: move;
+}
+
+.rectangles-layer rect.rect-shape:hover {
+  fill: rgba(91, 155, 213, 0.25);
+}
+
+.rectangles-layer rect.rect-shape.selected {
+  fill: rgba(91, 155, 213, 0.3);
+  stroke: #7ab8f0;
+  stroke-width: 2;
+}
+
+/* Resize handles */
+.resize-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #5b9bd5;
+  border: 2px solid #fff;
+  border-radius: 2px;
+  z-index: 10;
+}
+
+.resize-handle.nw { cursor: nw-resize; }
+.resize-handle.ne { cursor: ne-resize; }
+.resize-handle.sw { cursor: sw-resize; }
+.resize-handle.se { cursor: se-resize; }
+.resize-handle.n { cursor: n-resize; }
+.resize-handle.s { cursor: s-resize; }
+.resize-handle.e { cursor: e-resize; }
+.resize-handle.w { cursor: w-resize; }
+
+/* Dimension tooltip */
+.dim-tooltip {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 20;
+}
+
+/* Canvas rectangle labels */
+.rectangles-layer text.rect-label {
+  fill: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  pointer-events: none;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.rectangles-layer text.rect-label-dims {
+  fill: rgba(255, 255, 255, 0.6);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  pointer-events: none;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+/* Rotation button on canvas rectangles */
+.rectangles-layer g.rotate-btn {
+  cursor: pointer;
+}
+
+.rectangles-layer g.rotate-btn circle {
+  fill: rgba(91, 155, 213, 0.6);
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+
+.rectangles-layer g.rotate-btn:hover circle {
+  fill: rgba(91, 155, 213, 0.9);
+}
+
+.rectangles-layer g.rotate-btn text {
+  fill: #fff;
+  font-size: 12px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+/* Zoom indicator */
+.zoom-indicator {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #ccc;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Reset view button */
+.btn-reset {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  background: rgba(0, 0, 0, 0.7);
+  color: #ccc;
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.btn-reset:hover {
+  background: rgba(91, 155, 213, 0.3);
+  color: #fff;
+  border-color: #5b9bd5;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  color: #666;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 20px;
+}
+
+/* Sidebar toggle button */
+.sidebar-toggle {
+  display: none;
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.7);
+  color: #ccc;
+  border: 1px solid #555;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 20px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  line-height: 1;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(91, 155, 213, 0.3);
+  color: #fff;
+  border-color: #5b9bd5;
+}
+
+/* Responsive styles for mobile */
+@media (max-width: 768px) {
+  body {
+    overflow: auto;
+  }
+
+  .app {
+    flex-direction: column;
+    height: 100vh;
+  }
+
+  .sidebar-toggle {
+    display: block;
+  }
+
+  .sidebar {
+    position: absolute;
+    z-index: 15;
+    width: 280px;
+    min-width: 280px;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    box-shadow: 4px 0 16px rgba(0, 0, 0, 0.5);
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .canvas-area {
+    flex: 1;
+    min-height: 50vh;
+    width: 100%;
+  }
+
+  .canvas {
+    width: 100%;
+    height: 100%;
+    border-radius: 0;
+  }
+
+  .btn-reset {
+    left: auto;
+    right: 12px;
+  }
+
+  .dimension-inputs {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .input-group label {
+    font-size: 12px;
+  }
+
+  .input-group input {
+    font-size: 14px;
+    padding: 4px 2px;
+  }
+
+  .name-input {
+    font-size: 14px;
+    padding: 5px 6px;
+  }
+
+  .btn-add {
+    font-size: 14px;
+    padding: 8px;
+  }
+
+  .btn-file {
+    font-size: 13px;
+    padding: 6px 8px;
+  }
+
+  .rectangle-item .rect-name {
+    font-size: 14px;
+  }
+
+  .rectangle-item .rect-dims {
+    font-size: 12px;
+  }
+
+  .rectangle-item .rect-constraints {
+    font-size: 11px;
+  }
+
+  .rectangle-item {
+    padding: 8px;
+  }
+}
+
+@media (max-width: 400px) {
+  .dimension-inputs {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    width: 100%;
+    min-width: 100%;
+  }
+}
