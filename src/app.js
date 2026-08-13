@@ -231,7 +231,9 @@ function renderRectangles() {
 
     svgRect.addEventListener('touchstart', (e) => {
       e.stopPropagation();
-      selectRectangle(r.id);
+      e.preventDefault();
+      selectedId = r.id;
+      renderList();
       if (e.touches.length === 1) {
         const t = e.touches[0];
         startDrag({ clientX: t.clientX, clientY: t.clientY, stopPropagation: ()=>{} }, r.id);
@@ -268,7 +270,7 @@ function renderRectangles() {
 
     // Resize handles when selected
     if (r.id === selectedId) {
-      const handleSize = 10;
+      const handleSize = window.innerWidth <= 768 ? 24 : 10;
       const positions = [
         { pos: 'nw', cx: rx, cy: ry },
         { pos: 'n', cx: rx + rw / 2, cy: ry },
@@ -286,7 +288,7 @@ function renderRectangles() {
         h.setAttribute('y', hCy - handleSize / 2);
         h.setAttribute('width', handleSize);
         h.setAttribute('height', handleSize);
-        h.setAttribute('rx', 2);
+        h.setAttribute('rx', 3);
         h.setAttribute('fill', r.color);
         h.setAttribute('stroke', '#fff');
         h.setAttribute('stroke-width', 1.5);
@@ -301,6 +303,7 @@ function renderRectangles() {
 
         h.addEventListener('touchstart', (e) => {
           e.stopPropagation();
+          e.preventDefault();
           if (e.touches.length === 1) {
             const t = e.touches[0];
             startResize({ clientX: t.clientX, clientY: t.clientY }, r.id, pos);
@@ -313,6 +316,19 @@ function renderRectangles() {
 
     rectsSvg.appendChild(g);
   });
+}
+
+// --- Deferred render to avoid destroying touch targets ---
+let deferredRender = false;
+
+function requestRender() {
+  if (!deferredRender) {
+    deferredRender = true;
+    requestAnimationFrame(() => {
+      deferredRender = false;
+      renderRectangles();
+    });
+  }
 }
 
 // --- Select / Delete / Rotate ---
@@ -340,6 +356,62 @@ function rotateRectangle(id) {
   renderRectangles();
 }
 
+// --- Direct DOM update (avoids full re-render during touch drag) ---
+function updateRectDOM(r) {
+  const group = rectsSvg.querySelector(`g[data-id="${r.id}"]`);
+  if (!group) return;
+  const rx = r.x * PX_PER_INCH;
+  const ry = r.y * PX_PER_INCH;
+  const rw = r.width * PX_PER_INCH;
+  const rh = r.height * PX_PER_INCH;
+
+  const svgRect = group.querySelector('rect');
+  if (svgRect) {
+    svgRect.setAttribute('x', rx);
+    svgRect.setAttribute('y', ry);
+    svgRect.setAttribute('width', rw);
+    svgRect.setAttribute('height', rh);
+  }
+
+  const labelText = group.querySelector('.rect-label');
+  if (labelText) {
+    labelText.setAttribute('x', rx + rw / 2);
+    labelText.setAttribute('y', ry + rh / 2 - parseFloat(labelText.style.fontSize) * 0.6);
+  }
+
+  const labelDims = group.querySelector('.rect-label-dims');
+  if (labelDims) {
+    labelDims.setAttribute('x', rx + rw / 2);
+    labelDims.setAttribute('y', ry + rh / 2 + parseFloat(labelDims.style.fontSize) * 0.6);
+    labelDims.textContent = `${r.width.toFixed(1)}" × ${r.height.toFixed(1)}"`;
+  }
+
+  // Update resize handles if this rectangle is selected
+  if (r.id === selectedId) {
+    const handleSize = window.innerWidth <= 768 ? 24 : 10;
+    const positions = [
+      { pos: 'nw', cx: rx, cy: ry },
+      { pos: 'n', cx: rx + rw / 2, cy: ry },
+      { pos: 'ne', cx: rx + rw, cy: ry },
+      { pos: 'e', cx: rx + rw, cy: ry + rh / 2 },
+      { pos: 'se', cx: rx + rw, cy: ry + rh },
+      { pos: 's', cx: rx + rw / 2, cy: ry + rh },
+      { pos: 'sw', cx: rx, cy: ry + rh },
+      { pos: 'w', cx: rx, cy: ry + rh / 2 },
+    ];
+
+    positions.forEach(({ pos, cx: hCx, cy: hCy }) => {
+      const h = rectsSvg.querySelector(`rect[data-handle="${pos}"][data-id="${r.id}"]`);
+      if (h) {
+        h.setAttribute('x', hCx - handleSize / 2);
+        h.setAttribute('y', hCy - handleSize / 2);
+        h.setAttribute('width', handleSize);
+        h.setAttribute('height', handleSize);
+      }
+    });
+  }
+}
+
 // --- Drag ---
 function startDrag(e, id) {
   const rect = rectangles.find((r) => r.id === id);
@@ -357,7 +429,7 @@ function startDrag(e, id) {
     const dyInches = (clientY - startY) / (zoomLevel * PX_PER_INCH);
     rect.x = origX + dxInches;
     rect.y = origY + dyInches;
-    renderRectangles();
+    updateRectDOM(rect);
   }
 
   function onUp() {
@@ -365,6 +437,7 @@ function startDrag(e, id) {
     document.removeEventListener('mouseup', onUp);
     document.removeEventListener('touchmove', onMove);
     document.removeEventListener('touchend', onUp);
+    renderRectangles();
   }
 
   document.addEventListener('mousemove', onMove);
@@ -416,7 +489,7 @@ function startResize(e, id, handle) {
     rect.width = newW;
     rect.height = newH;
 
-    renderRectangles();
+    updateRectDOM(rect);
     updateListDims(id);
   }
 
@@ -425,6 +498,7 @@ function startResize(e, id, handle) {
     document.removeEventListener('mouseup', onUp);
     document.removeEventListener('touchmove', onMove);
     document.removeEventListener('touchend', onUp);
+    renderRectangles();
   }
 
   document.addEventListener('mousemove', onMove);
@@ -548,7 +622,7 @@ canvas.addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 canvas.addEventListener('touchmove', (e) => {
-  if (e.touches.length === 1) {
+  if (isPanning && e.touches.length === 1) {
     const t = e.touches[0];
     onPanMove(t.clientX, t.clientY);
     e.preventDefault();
