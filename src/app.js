@@ -1,105 +1,55 @@
-// --- State ---
-let rectangles = [];
-let selectedId = null;
-let nextId = 1;
+// --- Constants ---
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const PX_PER_INCH = 20; // world units: 1 inch = 20 px at 100% zoom
+const ZOOM_MIN = 0.1;
+const ZOOM_MAX = 5.0;
 
-// Pastel colors for rectangles
 const PASTEL_COLORS = [
   '#FFB3BA', '#FFDFBA', '#FFFFBA', '#BAFFC9', '#BAE1FF',
   '#DCC6FF', '#FFB3E6', '#B3FFE0', '#B3D9FF', '#FFB3B3',
   '#C9FFB3', '#FFD6B3', '#B3FFD9', '#E6B3FF', '#B3FF9C',
 ];
+
+// Resize handle positions as fractions of the rectangle's width/height
+const HANDLES = {
+  nw: [0, 0], n: [0.5, 0], ne: [1, 0], e: [1, 0.5],
+  se: [1, 1], s: [0.5, 1], sw: [0, 1], w: [0, 0.5],
+};
+
+// --- State ---
+let rectangles = [];
+let selectedId = null;
+let nextId = 1;
 let nextColorIndex = 0;
 
-function getNextColor() {
-  const color = PASTEL_COLORS[nextColorIndex % PASTEL_COLORS.length];
-  nextColorIndex++;
-  return color;
-}
-
-// Scale: 1 inch = 20 pixels
-const PX_PER_INCH = 20;
-
-// Pan/Zoom state
+// Viewport: top-left corner of the visible area in world px, plus zoom
+let viewX = 0;
+let viewY = 0;
 let zoomLevel = 1.0;
-const ZOOM_MIN = 0.1;
-const ZOOM_MAX = 5.0;
 
 // --- DOM refs ---
-const minWidthInput = document.getElementById('minWidth');
-const maxWidthInput = document.getElementById('maxWidth');
-const minHeightInput = document.getElementById('minHeight');
-const maxHeightInput = document.getElementById('maxHeight');
-const rectNameInput = document.getElementById('rectName');
-const addBtn = document.getElementById('addRectangle');
-const rectList = document.getElementById('rectangleList');
-const canvas = document.getElementById('canvas');
-const gridSvg = document.getElementById('grid');
-const rectsSvg = document.getElementById('rectangles');
-const zoomIndicator = document.getElementById('zoomIndicator');
+const $ = (id) => document.getElementById(id);
+const minWidthInput = $('minWidth');
+const maxWidthInput = $('maxWidth');
+const minHeightInput = $('minHeight');
+const maxHeightInput = $('maxHeight');
+const rectNameInput = $('rectName');
+const addForm = $('addForm');
+const rectList = $('rectangleList');
+const summary = $('summary');
+const canvas = $('canvas');
+const gridSvg = $('grid');
+const rectsSvg = $('rectangles');
+const zoomIndicator = $('zoomIndicator');
+const sidebar = $('sidebar');
+const sidebarToggle = $('sidebarToggle');
+const fileInput = $('fileInput');
 
-// --- Viewport / Pan/Zoom (viewBox-based) ---
-// viewBoxOrigin is the top-left corner of the visible area in world pixels
-// (1 world pixel = 1/20 inch)
-let viewBoxOriginX = 0;
-let viewBoxOriginY = 0;
-
-function getViewBox() {
-  const { w, h } = getCanvasSize();
-  const vbW = w / zoomLevel;
-  const vbH = h / zoomLevel;
-  return {
-    x: viewBoxOriginX,
-    y: viewBoxOriginY,
-    w: vbW,
-    h: vbH
-  };
+// --- Helpers ---
+function clamp(val, min, max) {
+  return Math.max(min, Math.min(max, val));
 }
 
-function applyViewBox() {
-  const vb = getViewBox();
-  const vbStr = `${vb.x} ${vb.y} ${vb.w} ${vb.h}`;
-  gridSvg.setAttribute('viewBox', vbStr);
-  rectsSvg.setAttribute('viewBox', vbStr);
-  zoomIndicator.textContent = Math.round(zoomLevel * 100) + '%';
-}
-
-function getCanvasSize() {
-  return { w: gridSvg.clientWidth, h: gridSvg.clientHeight };
-}
-
-// --- Grid ---
-function drawGrid() {
-  const vb = getViewBox();
-
-  const inchPx = PX_PER_INCH;
-  const inchStartX = Math.floor(vb.x / inchPx);
-  const inchEndX = Math.ceil((vb.x + vb.w) / inchPx);
-  const inchStartY = Math.floor(vb.y / inchPx);
-  const inchEndY = Math.ceil((vb.y + vb.h) / inchPx);
-
-  const y1 = inchStartY * inchPx;
-  const y2 = inchEndY * inchPx;
-  const x1 = inchStartX * inchPx;
-  const x2 = inchEndX * inchPx;
-
-  let lines = '';
-  for (let i = inchStartX; i <= inchEndX; i++) {
-    const px = i * inchPx;
-    const opacity = i % 4 === 0 ? 0.25 : 0.1;
-    lines += `<line x1="${px}" y1="${y1}" x2="${px}" y2="${y2}" stroke="rgba(255,255,255,${opacity})" stroke-width="1"/>`;
-  }
-  for (let i = inchStartY; i <= inchEndY; i++) {
-    const py = i * inchPx;
-    const opacity = i % 4 === 0 ? 0.25 : 0.1;
-    lines += `<line x1="${x1}" y1="${py}" x2="${x2}" y2="${py}" stroke="rgba(255,255,255,${opacity})" stroke-width="1"/>`;
-  }
-
-  gridSvg.innerHTML = lines;
-  applyViewBox();
-}
-
-// --- Constraints ---
 function getConstraints() {
   return {
     minWidth: parseFloat(minWidthInput.value) || 1,
@@ -109,85 +59,220 @@ function getConstraints() {
   };
 }
 
-function clampDim(val, min, max) {
-  return Math.max(min, Math.min(max, val));
+function getNextColor() {
+  return PASTEL_COLORS[nextColorIndex++ % PASTEL_COLORS.length];
 }
 
-// --- Sidebar list ---
+function formatDims(r) {
+  return `${r.width.toFixed(1)}″ × ${r.height.toFixed(1)}″`;
+}
+
+function findRect(id) {
+  return rectangles.find((r) => r.id === id);
+}
+
+function svgEl(tag, attrs) {
+  const el = document.createElementNS(SVG_NS, tag);
+  for (const key in attrs) el.setAttribute(key, attrs[key]);
+  return el;
+}
+
+function screenToWorld(clientX, clientY) {
+  const box = canvas.getBoundingClientRect();
+  return {
+    x: viewX + (clientX - box.left) / zoomLevel,
+    y: viewY + (clientY - box.top) / zoomLevel,
+  };
+}
+
+// Pan so that the given world point sits under the given screen point
+function pinWorldTo(world, clientX, clientY) {
+  const box = canvas.getBoundingClientRect();
+  viewX = world.x - (clientX - box.left) / zoomLevel;
+  viewY = world.y - (clientY - box.top) / zoomLevel;
+}
+
+// --- Rendering ---
+function render() {
+  renderView();
+  renderList();
+}
+
+// Everything that depends on pan/zoom
+function renderView() {
+  const w = canvas.clientWidth / zoomLevel;
+  const h = canvas.clientHeight / zoomLevel;
+  const viewBox = `${viewX} ${viewY} ${w} ${h}`;
+  gridSvg.setAttribute('viewBox', viewBox);
+  rectsSvg.setAttribute('viewBox', viewBox);
+  zoomIndicator.textContent = Math.round(zoomLevel * 100) + '%';
+
+  drawGrid(w, h);
+  renderCanvas();
+}
+
+function drawGrid(w, h) {
+  // Every inch, with a heavier line every 4 inches. Skip the minor lines
+  // once they get too dense to read.
+  const step = zoomLevel * PX_PER_INCH < 6 ? 4 : 1;
+  const x0 = Math.floor(viewX / PX_PER_INCH);
+  const x1 = Math.ceil((viewX + w) / PX_PER_INCH);
+  const y0 = Math.floor(viewY / PX_PER_INCH);
+  const y1 = Math.ceil((viewY + h) / PX_PER_INCH);
+  const line = (i, d) => `<path class="${i % 4 === 0 ? 'major' : 'minor'}" d="${d}" vector-effect="non-scaling-stroke"/>`;
+
+  let lines = '';
+  for (let i = Math.ceil(x0 / step) * step; i <= x1; i += step) {
+    const x = i * PX_PER_INCH;
+    lines += line(i, `M${x} ${y0 * PX_PER_INCH}V${y1 * PX_PER_INCH}`);
+  }
+  for (let i = Math.ceil(y0 / step) * step; i <= y1; i += step) {
+    const y = i * PX_PER_INCH;
+    lines += line(i, `M${x0 * PX_PER_INCH} ${y}H${x1 * PX_PER_INCH}`);
+  }
+  gridSvg.innerHTML = lines;
+}
+
+function renderCanvas() {
+  rectsSvg.replaceChildren();
+
+  rectangles.forEach((r) => {
+    const x = r.x * PX_PER_INCH;
+    const y = r.y * PX_PER_INCH;
+    const w = r.width * PX_PER_INCH;
+    const h = r.height * PX_PER_INCH;
+
+    const g = svgEl('g', { 'data-id': r.id });
+    g.appendChild(svgEl('rect', {
+      x, y, width: w, height: h,
+      fill: r.color,
+      class: 'piece-shape' + (r.id === selectedId ? ' selected' : ''),
+      'vector-effect': 'non-scaling-stroke',
+    }));
+
+    // Size labels in screen pixels so they fit the piece at any zoom
+    const screenW = w * zoomLevel;
+    const screenH = h * zoomLevel;
+    const nameSize = Math.min(screenW * 0.85 / (Math.max(r.name.length, 4) * 0.45), screenH * 0.3, 26);
+    if (nameSize >= 9) {
+      const dimsSize = clamp(nameSize * 0.5, 9, 12);
+      const showDims = screenH > nameSize + dimsSize * 2.5;
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+
+      const name = svgEl('text', {
+        class: 'label-name',
+        x: cx,
+        y: showDims ? cy - (dimsSize * 0.8) / zoomLevel : cy,
+        'font-size': nameSize / zoomLevel,
+      });
+      name.textContent = r.name;
+      g.appendChild(name);
+
+      if (showDims) {
+        const dims = svgEl('text', {
+          class: 'label-dims',
+          x: cx,
+          y: cy + (nameSize * 0.6) / zoomLevel,
+          'font-size': dimsSize / zoomLevel,
+        });
+        dims.textContent = formatDims(r);
+        g.appendChild(dims);
+      }
+    }
+
+    rectsSvg.appendChild(g);
+  });
+
+  // Handles go last so they sit on top of every piece
+  const sel = findRect(selectedId);
+  if (sel) {
+    const size = (matchMedia('(pointer: coarse)').matches ? 22 : 9) / zoomLevel;
+    for (const [pos, [fx, fy]] of Object.entries(HANDLES)) {
+      const handle = svgEl('rect', {
+        class: 'handle',
+        x: (sel.x + sel.width * fx) * PX_PER_INCH - size / 2,
+        y: (sel.y + sel.height * fy) * PX_PER_INCH - size / 2,
+        width: size,
+        height: size,
+        'data-handle': pos,
+        'vector-effect': 'non-scaling-stroke',
+      });
+      handle.style.cursor = `${pos}-resize`;
+      rectsSvg.appendChild(handle);
+    }
+  }
+}
+
 function renderList() {
-  rectList.innerHTML = '';
-  const constraints = getConstraints();
+  rectList.replaceChildren();
 
   if (rectangles.length === 0) {
-    rectList.innerHTML = '<div class="empty-state">No rectangles yet.<br>Add one to get started.</div>';
+    summary.textContent = '';
+    rectList.innerHTML = '<li class="empty-state">Nothing here yet. Name a piece above and add it to the layout.</li>';
     return;
   }
 
-  rectangles.forEach((r) => {
-    const li = document.createElement('li');
-    li.className = 'rectangle-item' + (r.id === selectedId ? ' active' : '');
-    li.dataset.id = r.id;
+  const area = rectangles.reduce((sum, r) => sum + r.width * r.height, 0);
+  summary.textContent = `${rectangles.length} · ${Math.round(area)} sq in`;
 
+  rectangles.forEach((r, i) => {
+    const li = document.createElement('li');
+    li.className = 'piece' + (r.id === selectedId ? ' active' : '');
+    li.dataset.id = r.id;
     li.innerHTML = `
-      <span class="rect-color-indicator" style="background:${r.color}"></span>
-      <div class="rect-info">
-        <span class="rect-name" title="${r.name}">${r.name}</span>
-        <span class="rect-dims">${r.width.toFixed(1)}" × ${r.height.toFixed(1)}"</span>
-        <span class="rect-constraints">W: ${constraints.minWidth}-${constraints.maxWidth}" H: ${constraints.minHeight}-${constraints.maxHeight}"</span>
+      <span class="piece-index">${String(i + 1).padStart(2, '0')}</span>
+      <span class="piece-swatch"></span>
+      <div class="piece-info">
+        <span class="piece-name" title="Click to rename"></span>
+        <span class="piece-dims"></span>
       </div>
-      <div class="rect-actions">
-        <button class="btn-action btn-rotate-btn" data-action="rotate" data-id="${r.id}" title="Rotate 90°">&#8635;</button>
-        <button class="btn-action" data-action="delete" data-id="${r.id}" title="Delete">&times;</button>
+      <div class="piece-actions">
+        <button class="icon-btn" data-action="rotate" title="Rotate 90°" aria-label="Rotate">↻</button>
+        <button class="icon-btn danger" data-action="delete" title="Delete" aria-label="Delete">×</button>
       </div>
     `;
-
-    li.addEventListener('click', (e) => {
-      if (e.target.closest('.btn-action')) return;
-      selectRectangle(r.id);
-    });
-
-    const nameSpan = li.querySelector('.rect-name');
-    nameSpan.addEventListener('click', (e) => {
-      e.stopPropagation();
-      startEditName(r.id, li);
-    });
-
-    li.querySelector('[data-action="delete"]').addEventListener('click', (e) => {
-      e.stopPropagation();
-      deleteRectangle(r.id);
-    });
-
-    li.querySelector('[data-action="rotate"]').addEventListener('click', (e) => {
-      e.stopPropagation();
-      rotateRectangle(r.id);
-    });
-
+    li.querySelector('.piece-swatch').style.background = r.color;
+    li.querySelector('.piece-name').textContent = r.name;
+    li.querySelector('.piece-dims').textContent = formatDims(r);
     rectList.appendChild(li);
   });
 }
 
-// --- Edit name in sidebar ---
-function startEditName(id, listItem) {
-  const rect = rectangles.find((r) => r.id === id);
-  if (!rect) return;
+// --- Actions ---
+function selectRectangle(id) {
+  selectedId = id;
+  render();
+}
 
-  const nameSpan = listItem.querySelector('.rect-name');
+function deleteRectangle(id) {
+  rectangles = rectangles.filter((r) => r.id !== id);
+  if (selectedId === id) selectedId = null;
+  render();
+}
+
+function rotateRectangle(id) {
+  const rect = findRect(id);
+  if (!rect) return;
+  [rect.width, rect.height] = [rect.height, rect.width];
+  render();
+}
+
+function startEditName(id, li) {
+  const rect = findRect(id);
+  const nameSpan = li.querySelector('.piece-name');
   const input = document.createElement('input');
   input.type = 'text';
-  input.className = 'rect-name-input';
+  input.className = 'piece-name-input';
   input.value = rect.name;
   nameSpan.replaceWith(input);
   input.focus();
   input.select();
 
-  function finishEdit() {
-    const newName = input.value.trim() || rect.name;
-    rect.name = newName;
-    renderList();
-    renderRectangles();
-  }
-
-  input.addEventListener('blur', finishEdit);
+  input.addEventListener('blur', () => {
+    rect.name = input.value.trim() || rect.name;
+    render();
+  });
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') input.blur();
     if (e.key === 'Escape') {
@@ -197,654 +282,266 @@ function startEditName(id, listItem) {
   });
 }
 
-// --- Canvas rendering ---
-function renderRectangles() {
-  rectsSvg.innerHTML = '';
+addForm.addEventListener('submit', (e) => {
+  e.preventDefault();
+  const c = getConstraints();
+  const width = (c.minWidth + c.maxWidth) / 2;
+  const height = (c.minHeight + c.maxHeight) / 2;
 
-  rectangles.forEach((r) => {
-    const rx = r.x * PX_PER_INCH;
-    const ry = r.y * PX_PER_INCH;
-    const rw = r.width * PX_PER_INCH;
-    const rh = r.height * PX_PER_INCH;
-
-    // Create a group for the rectangle
-    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    g.dataset.id = r.id;
-
-    // Rectangle shape
-    const svgRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    svgRect.setAttribute('x', rx);
-    svgRect.setAttribute('y', ry);
-    svgRect.setAttribute('width', rw);
-    svgRect.setAttribute('height', rh);
-    svgRect.setAttribute('rx', 3);
-    svgRect.setAttribute('fill', r.color + '40');
-    svgRect.setAttribute('stroke', r.color);
-    svgRect.setAttribute('stroke-width', r.id === selectedId ? 2.5 : 2);
-    svgRect.style.cursor = 'move';
-
-    svgRect.addEventListener('mousedown', (e) => {
-      e.stopPropagation();
-      selectRectangle(r.id);
-      startDrag(e, r.id);
-    });
-
-    svgRect.addEventListener('touchstart', (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      selectedId = r.id;
-      renderList();
-      if (e.touches.length === 1) {
-        const t = e.touches[0];
-        startDrag({ clientX: t.clientX, clientY: t.clientY, stopPropagation: ()=>{} }, r.id);
-      }
-    }, { passive: false });
-
-    g.appendChild(svgRect);
-
-    // Scaled label font based on rectangle size
-    const labelFontSize = Math.min(
-      Math.max(rw / r.name.length * 1.2, 8),
-      Math.max(rh * 0.3, 8),
-      28
-    );
-
-    // Label: name centered in rectangle
-    const labelText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    labelText.setAttribute('x', rx + rw / 2);
-    labelText.setAttribute('y', ry + rh / 2 - labelFontSize * 0.6);
-    labelText.classList.add('rect-label');
-    labelText.style.fontSize = (labelFontSize / zoomLevel) + 'px';
-    labelText.textContent = r.name;
-    g.appendChild(labelText);
-
-    // Label: dimensions below name
-    const dimFontSize = Math.max(labelFontSize * 0.75, 8);
-    const labelDims = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-    labelDims.setAttribute('x', rx + rw / 2);
-    labelDims.setAttribute('y', ry + rh / 2 + dimFontSize * 0.6);
-    labelDims.classList.add('rect-label-dims');
-    labelDims.style.fontSize = (dimFontSize / zoomLevel) + 'px';
-    labelDims.textContent = `${r.width.toFixed(1)}" × ${r.height.toFixed(1)}"`;
-    g.appendChild(labelDims);
-
-    // Resize handles when selected
-    if (r.id === selectedId) {
-      const handleSize = window.innerWidth <= 768 ? 24 : 10;
-      const positions = [
-        { pos: 'nw', cx: rx, cy: ry },
-        { pos: 'n', cx: rx + rw / 2, cy: ry },
-        { pos: 'ne', cx: rx + rw, cy: ry },
-        { pos: 'e', cx: rx + rw, cy: ry + rh / 2 },
-        { pos: 'se', cx: rx + rw, cy: ry + rh },
-        { pos: 's', cx: rx + rw / 2, cy: ry + rh },
-        { pos: 'sw', cx: rx, cy: ry + rh },
-        { pos: 'w', cx: rx, cy: ry + rh / 2 },
-      ];
-
-      positions.forEach(({ pos, cx: hCx, cy: hCy }) => {
-        const h = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        h.setAttribute('x', hCx - handleSize / 2);
-        h.setAttribute('y', hCy - handleSize / 2);
-        h.setAttribute('width', handleSize);
-        h.setAttribute('height', handleSize);
-        h.setAttribute('rx', 3);
-        h.setAttribute('fill', r.color);
-        h.setAttribute('stroke', '#fff');
-        h.setAttribute('stroke-width', 1.5);
-        h.style.cursor = `${pos}-resize`;
-        h.dataset.handle = pos;
-        h.dataset.id = r.id;
-
-        h.addEventListener('mousedown', (e) => {
-          e.stopPropagation();
-          startResize(e, r.id, pos);
-        });
-
-        h.addEventListener('touchstart', (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          if (e.touches.length === 1) {
-            const t = e.touches[0];
-            startResize({ clientX: t.clientX, clientY: t.clientY }, r.id, pos);
-          }
-        }, { passive: false });
-
-        rectsSvg.appendChild(h);
-      });
-    }
-
-    rectsSvg.appendChild(g);
-  });
-}
-
-// --- Deferred render to avoid destroying touch targets ---
-let deferredRender = false;
-
-function requestRender() {
-  if (!deferredRender) {
-    deferredRender = true;
-    requestAnimationFrame(() => {
-      deferredRender = false;
-      renderRectangles();
-    });
-  }
-}
-
-// --- Select / Delete / Rotate ---
-function selectRectangle(id) {
-  selectedId = id;
-  renderList();
-  renderRectangles();
-}
-
-function deleteRectangle(id) {
-  rectangles = rectangles.filter((r) => r.id !== id);
-  if (selectedId === id) selectedId = null;
-  renderList();
-  renderRectangles();
-}
-
-function rotateRectangle(id) {
-  const rect = rectangles.find((r) => r.id === id);
-  if (!rect) return;
-  // Swap width and height to rotate 90°
-  const temp = rect.width;
-  rect.width = rect.height;
-  rect.height = temp;
-  renderList();
-  renderRectangles();
-}
-
-// --- Direct DOM update (avoids full re-render during touch drag) ---
-function updateRectDOM(r) {
-  const group = rectsSvg.querySelector(`g[data-id="${r.id}"]`);
-  if (!group) return;
-  const rx = r.x * PX_PER_INCH;
-  const ry = r.y * PX_PER_INCH;
-  const rw = r.width * PX_PER_INCH;
-  const rh = r.height * PX_PER_INCH;
-
-  const svgRect = group.querySelector('rect');
-  if (svgRect) {
-    svgRect.setAttribute('x', rx);
-    svgRect.setAttribute('y', ry);
-    svgRect.setAttribute('width', rw);
-    svgRect.setAttribute('height', rh);
-  }
-
-  const labelText = group.querySelector('.rect-label');
-  if (labelText) {
-    labelText.setAttribute('x', rx + rw / 2);
-    labelText.setAttribute('y', ry + rh / 2 - parseFloat(labelText.style.fontSize) * 0.6);
-  }
-
-  const labelDims = group.querySelector('.rect-label-dims');
-  if (labelDims) {
-    labelDims.setAttribute('x', rx + rw / 2);
-    labelDims.setAttribute('y', ry + rh / 2 + parseFloat(labelDims.style.fontSize) * 0.6);
-    labelDims.textContent = `${r.width.toFixed(1)}" × ${r.height.toFixed(1)}"`;
-  }
-
-  // Update resize handles if this rectangle is selected
-  if (r.id === selectedId) {
-    const handleSize = window.innerWidth <= 768 ? 24 : 10;
-    const positions = [
-      { pos: 'nw', cx: rx, cy: ry },
-      { pos: 'n', cx: rx + rw / 2, cy: ry },
-      { pos: 'ne', cx: rx + rw, cy: ry },
-      { pos: 'e', cx: rx + rw, cy: ry + rh / 2 },
-      { pos: 'se', cx: rx + rw, cy: ry + rh },
-      { pos: 's', cx: rx + rw / 2, cy: ry + rh },
-      { pos: 'sw', cx: rx, cy: ry + rh },
-      { pos: 'w', cx: rx, cy: ry + rh / 2 },
-    ];
-
-    positions.forEach(({ pos, cx: hCx, cy: hCy }) => {
-      const h = rectsSvg.querySelector(`rect[data-handle="${pos}"][data-id="${r.id}"]`);
-      if (h) {
-        h.setAttribute('x', hCx - handleSize / 2);
-        h.setAttribute('y', hCy - handleSize / 2);
-        h.setAttribute('width', handleSize);
-        h.setAttribute('height', handleSize);
-      }
-    });
-  }
-}
-
-// --- Drag ---
-function startDrag(e, id) {
-  const rect = rectangles.find((r) => r.id === id);
-  if (!rect) return;
-
-  const startX = e.clientX;
-  const startY = e.clientY;
-  const origX = rect.x;
-  const origY = rect.y;
-
-  function onMove(ev) {
-    const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
-    const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
-    const dxInches = (clientX - startX) / (zoomLevel * PX_PER_INCH);
-    const dyInches = (clientY - startY) / (zoomLevel * PX_PER_INCH);
-    rect.x = origX + dxInches;
-    rect.y = origY + dyInches;
-    updateRectDOM(rect);
-  }
-
-  function onUp() {
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
-    document.removeEventListener('touchmove', onMove);
-    document.removeEventListener('touchend', onUp);
-    renderRectangles();
-  }
-
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
-  document.addEventListener('touchmove', onMove, { passive: false });
-  document.addEventListener('touchend', onUp);
-}
-
-// --- Resize ---
-function startResize(e, id, handle) {
-  const rect = rectangles.find((r) => r.id === id);
-  if (!rect) return;
-
-  const constraints = getConstraints();
-  const startX = e.clientX;
-  const startY = e.clientY;
-  const origX = rect.x;
-  const origY = rect.y;
-  const origW = rect.width;
-  const origH = rect.height;
-
-  function onMove(ev) {
-    const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
-    const clientY = ev.touches ? ev.touches[0].clientY : ev.clientY;
-    const dx = (clientX - startX) / (zoomLevel * PX_PER_INCH);
-    const dy = (clientY - startY) / (zoomLevel * PX_PER_INCH);
-
-    let newX = origX, newY = origY, newW = origW, newH = origH;
-
-    if (handle.includes('e')) {
-      newW = clampDim(origW + dx, constraints.minWidth, constraints.maxWidth);
-    }
-    if (handle.includes('w')) {
-      const proposedW = origW - dx;
-      newW = clampDim(proposedW, constraints.minWidth, constraints.maxWidth);
-      newX = origX + (origW - newW);
-    }
-    if (handle.includes('s')) {
-      newH = clampDim(origH + dy, constraints.minHeight, constraints.maxHeight);
-    }
-    if (handle.includes('n')) {
-      const proposedH = origH - dy;
-      newH = clampDim(proposedH, constraints.minHeight, constraints.maxHeight);
-      newY = origY + (origH - newH);
-    }
-
-    rect.x = newX;
-    rect.y = newY;
-    rect.width = newW;
-    rect.height = newH;
-
-    updateRectDOM(rect);
-    updateListDims(id);
-  }
-
-  function onUp() {
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
-    document.removeEventListener('touchmove', onMove);
-    document.removeEventListener('touchend', onUp);
-    renderRectangles();
-  }
-
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
-  document.addEventListener('touchmove', onMove, { passive: false });
-  document.addEventListener('touchend', onUp);
-}
-
-// --- Update sidebar dimensions without full re-render ---
-function updateListDims(id) {
-  const rect = rectangles.find((r) => r.id === id);
-  if (!rect) return;
-
-  const listItem = rectList.querySelector(`.rectangle-item[data-id="${id}"]`);
-  if (!listItem) return;
-
-  const dimsEl = listItem.querySelector('.rect-dims');
-  if (dimsEl) {
-    dimsEl.textContent = `${rect.width.toFixed(1)}" × ${rect.height.toFixed(1)}"`;
-  }
-
-  const group = rectsSvg.querySelector(`g[data-id="${id}"]`);
-  if (group) {
-    const dimsText = group.querySelector('.rect-label-dims');
-    if (dimsText) {
-      dimsText.textContent = `${rect.width.toFixed(1)}" × ${rect.height.toFixed(1)}"`;
-    }
-  }
-}
-
-// --- Add rectangle ---
-addBtn.addEventListener('click', () => {
-  const constraints = getConstraints();
-
-  const defaultW = (constraints.minWidth + constraints.maxWidth) / 2;
-  const defaultH = (constraints.minHeight + constraints.maxHeight) / 2;
-
-  // Center in visible canvas area
-  const centerX = (viewBoxOriginX + canvas.clientWidth / zoomLevel / 2) / PX_PER_INCH;
-  const centerY = (viewBoxOriginY + canvas.clientHeight / zoomLevel / 2) / PX_PER_INCH;
-  const x = centerX - defaultW / 2;
-  const y = centerY - defaultH / 2;
-
-  const customName = rectNameInput.value.trim();
-  const name = customName || `Rectangle ${nextId}`;
-  const color = getNextColor();
+  // Center the new piece in the visible canvas area
+  const centerX = (viewX + canvas.clientWidth / zoomLevel / 2) / PX_PER_INCH;
+  const centerY = (viewY + canvas.clientHeight / zoomLevel / 2) / PX_PER_INCH;
 
   const rect = {
     id: nextId++,
-    name,
-    x,
-    y,
-    width: defaultW,
-    height: defaultH,
-    color,
+    name: rectNameInput.value.trim() || `Piece ${rectangles.length + 1}`,
+    x: centerX - width / 2,
+    y: centerY - height / 2,
+    width,
+    height,
+    color: getNextColor(),
   };
 
   rectangles.push(rect);
   selectedId = rect.id;
   rectNameInput.value = '';
-  renderList();
-  renderRectangles();
+  render();
 });
 
-rectNameInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') addBtn.click();
+// One listener for every row in the list
+rectList.addEventListener('click', (e) => {
+  const li = e.target.closest('.piece');
+  if (!li) return;
+  const id = Number(li.dataset.id);
+  const action = e.target.closest('[data-action]')?.dataset.action;
+
+  if (action === 'delete') deleteRectangle(id);
+  else if (action === 'rotate') rotateRectangle(id);
+  else if (e.target.classList.contains('piece-name')) startEditName(id, li);
+  else selectRectangle(id);
 });
 
-// --- Canvas pan handler ---
-let isPanning = false;
-let panStartMouseX = 0;
-let panStartMouseY = 0;
+// --- Canvas gestures (Pointer Events cover mouse, pen and touch) ---
+const pointers = new Map();
+let gesture = null;
 
-function startPan(clientX, clientY) {
-  if (isPanning) return;
-  isPanning = true;
-  panStartMouseX = clientX;
-  panStartMouseY = clientY;
+function startPinch() {
+  const [a, b] = [...pointers.values()];
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  return {
+    type: 'pinch',
+    startDist: Math.hypot(a.x - b.x, a.y - b.y) || 1,
+    startZoom: zoomLevel,
+    anchor: screenToWorld(mid.x, mid.y),
+  };
+}
+
+function startPan(clientX, clientY, moved = false) {
   canvas.classList.add('panning');
+  return { type: 'pan', startX: clientX, startY: clientY, origX: viewX, origY: viewY, moved };
 }
 
-function onPanMove(clientX, clientY) {
-  if (!isPanning) return;
-  const dx = clientX - panStartMouseX;
-  const dy = clientY - panStartMouseY;
-  viewBoxOriginX -= dx / zoomLevel;
-  viewBoxOriginY -= dy / zoomLevel;
-  panStartMouseX = clientX;
-  panStartMouseY = clientY;
-  drawGrid();
-  renderRectangles();
-}
+canvas.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'mouse' && e.button !== 0) return;
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-function stopPan() {
-  if (isPanning) {
-    isPanning = false;
-    canvas.classList.remove('panning');
+  if (pointers.size === 2) {
+    gesture = startPinch();
+    return;
   }
-}
+  if (pointers.size > 2) return;
 
-canvas.addEventListener('mousedown', (e) => {
-  if (e.target === canvas || e.target === gridSvg || e.target === rectsSvg) {
-    startPan(e.clientX, e.clientY);
-    e.preventDefault();
+  const handle = e.target.dataset?.handle;
+  const pieceId = Number(e.target.closest('g[data-id]')?.dataset.id);
+  const rect = handle ? findRect(selectedId) : findRect(pieceId);
+
+  if (rect) {
+    if (!handle) selectRectangle(rect.id);
+    gesture = {
+      type: handle ? 'resize' : 'move',
+      handle,
+      rect,
+      constraints: getConstraints(),
+      startX: e.clientX,
+      startY: e.clientY,
+      orig: { ...rect },
+    };
+  } else {
+    gesture = startPan(e.clientX, e.clientY);
   }
 });
 
-document.addEventListener('mousemove', (e) => {
-  onPanMove(e.clientX, e.clientY);
-});
+canvas.addEventListener('pointermove', (e) => {
+  if (!pointers.has(e.pointerId) || !gesture) return;
+  pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-document.addEventListener('mouseup', stopPan);
-
-// Touch pan support
-canvas.addEventListener('touchstart', (e) => {
-  if ((e.target === canvas || e.target === gridSvg || e.target === rectsSvg) && e.touches.length === 1) {
-    const t = e.touches[0];
-    startPan(t.clientX, t.clientY);
-    e.preventDefault();
-  }
-}, { passive: false });
-
-canvas.addEventListener('touchmove', (e) => {
-  if (isPanning && e.touches.length === 1) {
-    const t = e.touches[0];
-    onPanMove(t.clientX, t.clientY);
-    e.preventDefault();
-  }
-}, { passive: false });
-
-canvas.addEventListener('touchend', (e) => {
-  if (e.touches.length === 0) {
-    stopPan();
-    initialPinchDist = null;
-  }
-});
-
-// --- Pinch-to-zoom ---
-let initialPinchDist = null;
-let initialZoomForPinch = 1.0;
-let pinchCenterX = 0;
-let pinchCenterY = 0;
-
-function getPinchDist(e) {
-  const dx = e.touches[0].clientX - e.touches[1].clientX;
-  const dy = e.touches[0].clientY - e.touches[1].clientY;
-  return Math.sqrt(dx * dx + dy * dy);
-}
-
-canvas.addEventListener('touchstart', (e) => {
-  if (e.touches.length === 2) {
-    initialPinchDist = getPinchDist(e);
-    initialZoomForPinch = zoomLevel;
-    pinchCenterX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-    pinchCenterY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-    e.preventDefault();
-  }
-}, { passive: false });
-
-canvas.addEventListener('touchmove', (e) => {
-  if (e.touches.length === 2 && initialPinchDist !== null) {
-    e.preventDefault();
-    const currentDist = getPinchDist(e);
-    const scale = currentDist / initialPinchDist;
-    const newZoom = clampDim(initialZoomForPinch * scale, ZOOM_MIN, ZOOM_MAX);
-
-    // Zoom toward pinch center
-    const canvasRect = canvas.getBoundingClientRect();
-    const worldX = viewBoxOriginX + (pinchCenterX - canvasRect.left) / zoomLevel;
-    const worldY = viewBoxOriginY + (pinchCenterY - canvasRect.top) / zoomLevel;
-
-    zoomLevel = newZoom;
-    viewBoxOriginX = worldX - (pinchCenterX - canvasRect.left) / zoomLevel;
-    viewBoxOriginY = worldY - (pinchCenterY - canvasRect.top) / zoomLevel;
-
-    drawGrid();
-    renderRectangles();
-  }
-}, { passive: false });
-
-// --- Canvas click to deselect ---
-canvas.addEventListener('click', (e) => {
-  if (e.target === canvas || e.target === gridSvg || e.target === rectsSvg) {
-    selectedId = null;
-    renderList();
-    renderRectangles();
-  }
-});
-
-// --- Zoom with scroll wheel ---
-canvas.addEventListener('wheel', (e) => {
-  e.preventDefault();
-
-  const canvasRect = canvas.getBoundingClientRect();
-  const mouseX = e.clientX - canvasRect.left;
-  const mouseY = e.clientY - canvasRect.top;
-
-  // Mouse position in viewBox units
-  const worldX = viewBoxOriginX + mouseX / zoomLevel;
-  const worldY = viewBoxOriginY + mouseY / zoomLevel;
-
-  const oldZoom = zoomLevel;
-  const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
-  zoomLevel = clampDim(zoomLevel * zoomFactor, ZOOM_MIN, ZOOM_MAX);
-
-  // Adjust viewBox origin so zoom targets mouse position
-  viewBoxOriginX = worldX - mouseX / zoomLevel;
-  viewBoxOriginY = worldY - mouseY / zoomLevel;
-
-  drawGrid();
-  renderRectangles();
-}, { passive: false });
-
-// --- Reset zoom/pan to fit rectangles ---
-function resetView() {
-  zoomLevel = 1.0;
-
-  if (rectangles.length === 0) {
-    viewBoxOriginX = 0;
-    viewBoxOriginY = 0;
-    drawGrid();
-    renderRectangles();
+  if (gesture.type === 'pinch') {
+    const [a, b] = [...pointers.values()];
+    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+    zoomLevel = clamp(gesture.startZoom * dist / gesture.startDist, ZOOM_MIN, ZOOM_MAX);
+    pinWorldTo(gesture.anchor, (a.x + b.x) / 2, (a.y + b.y) / 2);
+    renderView();
     return;
   }
 
-  // Find bounding box of all rectangles
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  rectangles.forEach((r) => {
-    if (r.x < minX) minX = r.x;
-    if (r.y < minY) minY = r.y;
-    if (r.x + r.width > maxX) maxX = r.x + r.width;
-    if (r.y + r.height > maxY) maxY = r.y + r.height;
-  });
+  const dxPx = e.clientX - gesture.startX;
+  const dyPx = e.clientY - gesture.startY;
 
-  const padding = 2; // inches
-  minX -= padding;
-  minY -= padding;
-  maxX += padding;
-  maxY += padding;
+  if (gesture.type === 'pan') {
+    viewX = gesture.origX - dxPx / zoomLevel;
+    viewY = gesture.origY - dyPx / zoomLevel;
+    if (Math.abs(dxPx) + Math.abs(dyPx) > 3) gesture.moved = true;
+    renderView();
+    return;
+  }
 
-  const { w: canvasW, h: canvasH } = getCanvasSize();
-  const contentW = (maxX - minX) * PX_PER_INCH;
-  const contentH = (maxY - minY) * PX_PER_INCH;
-  const scale = Math.min(canvasW / contentW, canvasH / contentH);
-  zoomLevel = Math.max(ZOOM_MIN, Math.min(scale, ZOOM_MAX));
+  const dx = dxPx / (zoomLevel * PX_PER_INCH);
+  const dy = dyPx / (zoomLevel * PX_PER_INCH);
+  const { rect, orig, handle, constraints: c } = gesture;
 
-  // Center the view on the content
-  const centerX = ((minX + maxX) / 2) * PX_PER_INCH;
-  const centerY = ((minY + maxY) / 2) * PX_PER_INCH;
-  viewBoxOriginX = centerX - (canvasW / zoomLevel) / 2;
-  viewBoxOriginY = centerY - (canvasH / zoomLevel) / 2;
+  if (gesture.type === 'move') {
+    rect.x = orig.x + dx;
+    rect.y = orig.y + dy;
+    renderCanvas();
+    return;
+  }
 
-  drawGrid();
-  renderRectangles();
-}
-
-const resetBtn = document.getElementById('resetView');
-if (resetBtn) {
-  resetBtn.addEventListener('click', resetView);
-}
-
-// --- Sidebar toggle (mobile) ---
-const sidebarToggle = document.getElementById('sidebarToggle');
-const sidebar = document.querySelector('.sidebar');
-
-if (sidebarToggle && sidebar) {
-  sidebarToggle.addEventListener('click', () => {
-    sidebar.classList.toggle('open');
-  });
-
-  // Close sidebar when tapping outside
-  document.addEventListener('touchend', (e) => {
-    if (!sidebar.contains(e.target) && e.target !== sidebarToggle && !sidebarToggle.contains(e.target)) {
-      sidebar.classList.remove('open');
-    }
-  });
-}
-
-// --- Save layout to JSON file ---
-const saveBtn = document.getElementById('saveLayout');
-const fileInput = document.getElementById('fileInput');
-const loadBtn = document.getElementById('loadLayout');
-
-if (saveBtn) {
-  saveBtn.addEventListener('click', () => {
-    const data = {
-      rectangles: rectangles.map((r) => ({
-        id: r.id,
-        name: r.name,
-        x: r.x,
-        y: r.y,
-        width: r.width,
-        height: r.height,
-        color: r.color,
-      })),
-      nextId,
-    };
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'layout.json';
-    a.click();
-    URL.revokeObjectURL(url);
-  });
-}
-
-// --- Load layout from JSON file ---
-if (loadBtn && fileInput) {
-  loadBtn.addEventListener('click', () => {
-    fileInput.value = '';
-    fileInput.click();
-  });
-
-  fileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      try {
-        const data = JSON.parse(ev.target.result);
-        if (data.rectangles && Array.isArray(data.rectangles)) {
-          rectangles = data.rectangles;
-          nextId = data.nextId || rectangles.length + 1;
-          selectedId = null;
-          renderList();
-          renderRectangles();
-        }
-      } catch (err) {
-        console.error('Failed to load layout:', err);
-      }
-    };
-    reader.readAsText(file);
-  });
-}
-
-// --- Init ---
-function init() {
-  drawGrid();
-  renderList();
-  renderRectangles();
-}
-
-window.addEventListener('resize', () => {
-  drawGrid();
-  renderRectangles();
+  // Resize: the opposite edge stays put
+  if (handle.includes('e')) rect.width = clamp(orig.width + dx, c.minWidth, c.maxWidth);
+  if (handle.includes('s')) rect.height = clamp(orig.height + dy, c.minHeight, c.maxHeight);
+  if (handle.includes('w')) {
+    rect.width = clamp(orig.width - dx, c.minWidth, c.maxWidth);
+    rect.x = orig.x + orig.width - rect.width;
+  }
+  if (handle.includes('n')) {
+    rect.height = clamp(orig.height - dy, c.minHeight, c.maxHeight);
+    rect.y = orig.y + orig.height - rect.height;
+  }
+  render();
 });
 
-init();
+function endPointer(e) {
+  if (!pointers.delete(e.pointerId)) return;
+
+  // A tap on empty canvas clears the selection
+  if (gesture?.type === 'pan' && !gesture.moved && e.type === 'pointerup' && selectedId !== null) {
+    selectRectangle(null);
+  }
+
+  if (pointers.size === 0) {
+    gesture = null;
+    canvas.classList.remove('panning');
+  } else if (gesture?.type === 'pinch' && pointers.size === 1) {
+    // Lifting one finger of a pinch continues as a pan with the other
+    const [p] = pointers.values();
+    gesture = startPan(p.x, p.y, true);
+  }
+}
+
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+
+// Scroll wheel / trackpad zoom toward the cursor
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const anchor = screenToWorld(e.clientX, e.clientY);
+  const delta = clamp(e.deltaY, -100, 100);
+  zoomLevel = clamp(zoomLevel * Math.exp(-delta * 0.002), ZOOM_MIN, ZOOM_MAX);
+  pinWorldTo(anchor, e.clientX, e.clientY);
+  renderView();
+}, { passive: false });
+
+// --- Fit all pieces in view ---
+function fitView() {
+  if (rectangles.length === 0) {
+    zoomLevel = 1.0;
+    viewX = 0;
+    viewY = 0;
+    renderView();
+    return;
+  }
+
+  const padding = 2; // inches
+  const minX = Math.min(...rectangles.map((r) => r.x)) - padding;
+  const minY = Math.min(...rectangles.map((r) => r.y)) - padding;
+  const maxX = Math.max(...rectangles.map((r) => r.x + r.width)) + padding;
+  const maxY = Math.max(...rectangles.map((r) => r.y + r.height)) + padding;
+
+  const canvasW = canvas.clientWidth;
+  const canvasH = canvas.clientHeight;
+  zoomLevel = clamp(
+    Math.min(canvasW / ((maxX - minX) * PX_PER_INCH), canvasH / ((maxY - minY) * PX_PER_INCH)),
+    ZOOM_MIN,
+    ZOOM_MAX,
+  );
+  viewX = ((minX + maxX) / 2) * PX_PER_INCH - canvasW / zoomLevel / 2;
+  viewY = ((minY + maxY) / 2) * PX_PER_INCH - canvasH / zoomLevel / 2;
+  renderView();
+}
+
+$('resetView').addEventListener('click', fitView);
+
+// --- Keyboard ---
+document.addEventListener('keydown', (e) => {
+  if (e.target.matches('input')) return;
+  if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId !== null) {
+    deleteRectangle(selectedId);
+  } else if (e.key === 'Escape' && selectedId !== null) {
+    selectRectangle(null);
+  }
+});
+
+// --- Sidebar toggle (mobile) ---
+function setSidebarOpen(open) {
+  sidebar.classList.toggle('open', open);
+  sidebarToggle.setAttribute('aria-expanded', open);
+}
+
+sidebarToggle.addEventListener('click', () => {
+  setSidebarOpen(!sidebar.classList.contains('open'));
+});
+
+// Close the sidebar when tapping the canvas
+canvas.addEventListener('pointerdown', () => setSidebarOpen(false));
+
+// --- Save / Load ---
+$('saveLayout').addEventListener('click', () => {
+  const data = {
+    rectangles: rectangles.map(({ id, name, x, y, width, height, color }) => ({ id, name, x, y, width, height, color })),
+    nextId,
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'layout.json';
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+$('loadLayout').addEventListener('click', () => {
+  fileInput.value = '';
+  fileInput.click();
+});
+
+fileInput.addEventListener('change', async () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (!Array.isArray(data.rectangles)) throw new Error('No rectangles in file');
+    rectangles = data.rectangles;
+    nextId = data.nextId || Math.max(0, ...rectangles.map((r) => r.id)) + 1;
+    nextColorIndex = rectangles.length;
+    selectedId = null;
+    renderList();
+    fitView();
+  } catch (err) {
+    alert(`Couldn't open that file: ${err.message}`);
+  }
+});
+
+// --- Init ---
+window.addEventListener('resize', renderView);
+render();
