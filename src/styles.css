@@ -338,6 +338,11 @@ input:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
+.piece-dims .outside {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .piece-actions {
   display: flex;
   gap: 2px;
