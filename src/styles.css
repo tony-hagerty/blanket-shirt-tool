@@ -256,7 +256,7 @@ input:focus-visible {
 
 .piece {
   display: grid;
-  grid-template-columns: 22px 14px 1fr auto;
+  grid-template-columns: 22px 18px 1fr auto;
   align-items: center;
   gap: 10px;
   padding: 10px 24px;
@@ -291,10 +291,19 @@ input:focus-visible {
 }
 
 .piece-swatch {
-  width: 14px;
-  height: 14px;
-  border-radius: 2px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
   box-shadow: inset 0 0 0 1px var(--swatch-edge);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.piece-swatch:hover {
+  transform: scale(1.15);
+  box-shadow: inset 0 0 0 1px var(--swatch-edge), 0 0 0 3px var(--rule);
 }
 
 .piece-info {
@@ -434,11 +443,15 @@ input:focus-visible {
 
 .piece-shape.selected {
   stroke: var(--accent);
-  stroke-width: 2;
+  stroke-width: 1.5;
 }
 
-.handle {
-  fill: var(--sheet);
+.handle-hit {
+  fill: transparent;
+}
+
+.handle-knob {
+  fill: #fff;
   stroke: var(--accent);
   stroke-width: 1.5;
 }
@@ -461,6 +474,79 @@ input:focus-visible {
   text-anchor: middle;
   dominant-baseline: middle;
   pointer-events: none;
+}
+
+/* Color picker popover */
+.color-picker {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 12px;
+  background: var(--sheet);
+  color: var(--ink);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 28px);
+  gap: 8px;
+}
+
+.color-option {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--swatch-edge);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.color-option:hover {
+  transform: scale(1.12);
+}
+
+.color-option.current {
+  box-shadow: inset 0 0 0 1px var(--swatch-edge), 0 0 0 2px var(--sheet), 0 0 0 4px var(--ink);
+}
+
+.color-custom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rule);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.color-custom input {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.color-custom input::-webkit-color-swatch-wrapper,
+.color-custom input::-webkit-color-swatch {
+  padding: 0;
+  border: none;
+  opacity: 0;
+}
+
+.color-custom input::-moz-color-swatch {
+  border: none;
+  opacity: 0;
 }
 
 /* Floating controls */

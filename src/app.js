@@ -44,6 +44,9 @@ const zoomIndicator = $('zoomIndicator');
 const sidebar = $('sidebar');
 const sidebarToggle = $('sidebarToggle');
 const fileInput = $('fileInput');
+const colorPicker = $('colorPicker');
+const colorGrid = $('colorGrid');
+const customColor = $('customColor');
 
 // --- Helpers ---
 function clamp(val, min, max) {
@@ -65,6 +68,13 @@ function getNextColor() {
 
 function formatDims(r) {
   return `${r.width.toFixed(1)}″ × ${r.height.toFixed(1)}″`;
+}
+
+// Dark ink on light colors, white on dark ones
+function labelColorFor(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  const [r, g, b] = [n >> 16, (n >> 8) & 255, n & 255];
+  return 0.299 * r + 0.587 * g + 0.114 * b < 140 ? '#fff' : null;
 }
 
 function findRect(id) {
@@ -143,6 +153,8 @@ function renderCanvas() {
     const h = r.height * PX_PER_INCH;
 
     const g = svgEl('g', { 'data-id': r.id });
+    const labelColor = labelColorFor(r.color);
+    if (labelColor) g.style.setProperty('--swatch-ink', labelColor);
     g.appendChild(svgEl('rect', {
       x, y, width: w, height: h,
       fill: r.color,
@@ -186,21 +198,54 @@ function renderCanvas() {
 
   // Handles go last so they sit on top of every piece
   const sel = findRect(selectedId);
-  if (sel) {
-    const size = (matchMedia('(pointer: coarse)').matches ? 22 : 9) / zoomLevel;
-    for (const [pos, [fx, fy]] of Object.entries(HANDLES)) {
-      const handle = svgEl('rect', {
-        class: 'handle',
-        x: (sel.x + sel.width * fx) * PX_PER_INCH - size / 2,
-        y: (sel.y + sel.height * fy) * PX_PER_INCH - size / 2,
-        width: size,
-        height: size,
-        'data-handle': pos,
-        'vector-effect': 'non-scaling-stroke',
-      });
-      handle.style.cursor = `${pos}-resize`;
-      rectsSvg.appendChild(handle);
-    }
+  if (sel) renderHandles(sel);
+}
+
+// Corner dots and edge pills, sized in screen pixels. Each sits on a larger
+// invisible hit area so it's easy to grab with a finger.
+function renderHandles(r) {
+  const touch = matchMedia('(pointer: coarse)').matches;
+  const px = (n) => n / zoomLevel; // screen px -> world units
+  const dot = px(touch ? 16 : 11);
+  const pillLong = px(touch ? 24 : 18);
+  const pillShort = px(touch ? 8 : 6);
+  const hit = px(touch ? 40 : 20);
+  const screenW = r.width * PX_PER_INCH * zoomLevel;
+  const screenH = r.height * PX_PER_INCH * zoomLevel;
+
+  // Soft shadow; its offsets live in world units, so rebuild it per zoom
+  const defs = svgEl('defs', {});
+  const filter = svgEl('filter', { id: 'handle-shadow', x: '-100%', y: '-100%', width: '300%', height: '300%' });
+  filter.appendChild(svgEl('feDropShadow', {
+    dx: 0, dy: px(1), stdDeviation: px(1.5), 'flood-color': '#000', 'flood-opacity': 0.25,
+  }));
+  defs.appendChild(filter);
+  rectsSvg.appendChild(defs);
+
+  for (const [pos, [fx, fy]] of Object.entries(HANDLES)) {
+    const isEdge = pos.length === 1;
+    const horizontal = pos === 'n' || pos === 's';
+    // Skip edge pills on pieces too small to fit them between the corners
+    if (isEdge && (horizontal ? screenW : screenH) < 48) continue;
+
+    const cx = (r.x + r.width * fx) * PX_PER_INCH;
+    const cy = (r.y + r.height * fy) * PX_PER_INCH;
+    const w = isEdge ? (horizontal ? pillLong : pillShort) : dot;
+    const h = isEdge ? (horizontal ? pillShort : pillLong) : dot;
+
+    const g = svgEl('g', { class: 'handle', 'data-handle': pos });
+    g.style.cursor = `${pos}-resize`;
+    g.appendChild(svgEl('rect', {
+      class: 'handle-hit', x: cx - hit / 2, y: cy - hit / 2, width: hit, height: hit,
+    }));
+    g.appendChild(svgEl('rect', {
+      class: 'handle-knob',
+      x: cx - w / 2, y: cy - h / 2, width: w, height: h,
+      rx: Math.min(w, h) / 2,
+      filter: 'url(#handle-shadow)',
+      'vector-effect': 'non-scaling-stroke',
+    }));
+    rectsSvg.appendChild(g);
   }
 }
 
@@ -222,7 +267,7 @@ function renderList() {
     li.dataset.id = r.id;
     li.innerHTML = `
       <span class="piece-index">${String(i + 1).padStart(2, '0')}</span>
-      <span class="piece-swatch"></span>
+      <button class="piece-swatch" data-action="color" title="Change color" aria-label="Change color"></button>
       <div class="piece-info">
         <span class="piece-name" title="Click to rename"></span>
         <span class="piece-dims"></span>
@@ -315,11 +360,56 @@ rectList.addEventListener('click', (e) => {
   const id = Number(li.dataset.id);
   const action = e.target.closest('[data-action]')?.dataset.action;
 
-  if (action === 'delete') deleteRectangle(id);
+  if (action === 'color') openColorPicker(id, e.target);
+  else if (action === 'delete') deleteRectangle(id);
   else if (action === 'rotate') rotateRectangle(id);
   else if (e.target.classList.contains('piece-name')) startEditName(id, li);
   else selectRectangle(id);
 });
+
+// --- Color picker ---
+let colorTargetId = null;
+
+PASTEL_COLORS.forEach((color) => {
+  const btn = document.createElement('button');
+  btn.className = 'color-option';
+  btn.style.background = color;
+  btn.dataset.color = color;
+  btn.setAttribute('aria-label', color);
+  colorGrid.appendChild(btn);
+});
+
+function setColor(color) {
+  const rect = findRect(colorTargetId);
+  if (!rect) return;
+  rect.color = color;
+  render();
+}
+
+function openColorPicker(id, anchor) {
+  colorTargetId = id;
+  const color = findRect(id).color.toUpperCase();
+  colorGrid.querySelectorAll('.color-option').forEach((btn) => {
+    btn.classList.toggle('current', btn.dataset.color === color);
+  });
+  if (/^#[0-9A-F]{6}$/.test(color)) customColor.value = color.toLowerCase();
+
+  colorPicker.showPopover();
+  // Sit just below the swatch, kept inside the viewport
+  const a = anchor.getBoundingClientRect();
+  const p = colorPicker.getBoundingClientRect();
+  colorPicker.style.left = clamp(a.left - 8, 8, innerWidth - p.width - 8) + 'px';
+  colorPicker.style.top = (a.bottom + p.height + 8 > innerHeight ? a.top - p.height - 8 : a.bottom + 8) + 'px';
+}
+
+colorGrid.addEventListener('click', (e) => {
+  const color = e.target.dataset.color;
+  if (!color) return;
+  setColor(color);
+  colorPicker.hidePopover();
+});
+
+customColor.addEventListener('input', () => setColor(customColor.value.toUpperCase()));
 
 // --- Canvas gestures (Pointer Events cover mouse, pen and touch) ---
 const pointers = new Map();
@@ -352,7 +442,7 @@ canvas.addEventListener('pointerdown', (e) => {
   }
   if (pointers.size > 2) return;
 
-  const handle = e.target.dataset?.handle;
+  const handle = e.target.closest('[data-handle]')?.dataset.handle;
   const pieceId = Number(e.target.closest('g[data-id]')?.dataset.id);
   const rect = handle ? findRect(selectedId) : findRect(pieceId);
 
@@ -484,7 +574,7 @@ $('resetView').addEventListener('click', fitView);
 
 // --- Keyboard ---
 document.addEventListener('keydown', (e) => {
-  if (e.target.matches('input')) return;
+  if (e.target.matches('input') || colorPicker.matches(':popover-open')) return;
   if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId !== null) {
     deleteRectangle(selectedId);
   } else if (e.key === 'Escape' && selectedId !== null) {
