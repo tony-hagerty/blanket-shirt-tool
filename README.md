@@ -6,7 +6,7 @@ A web-based rectangle layout tool for designing quilt blocks, patchwork layouts,
 
 - **Canvas Drawing** -- Drag, resize, and arrange pieces on a graph-paper canvas (1 square = 1 inch)
 - **Dimension Constraints** -- Set min/max width and height limits to keep rectangles within desired bounds
-- **Color Coding** -- Each new piece gets a unique pastel color
+- **Color Coding** -- Each new piece gets a pastel color; click its swatch in the sidebar to pick another or choose a custom one
 - **Custom Names** -- Name each piece; click the name in the sidebar to edit inline
 - **Rotation** -- Rotate pieces 90° via the sidebar button (swaps width and height)
 - **Pan & Zoom** -- Drag the background to pan; scroll or pinch to zoom (10% -- 500%); **Fit** frames every piece
