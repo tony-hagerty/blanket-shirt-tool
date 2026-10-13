@@ -153,7 +153,7 @@ function renderCanvas() {
     // Size labels in screen pixels so they fit the piece at any zoom
     const screenW = w * zoomLevel;
     const screenH = h * zoomLevel;
-    const nameSize = Math.min(screenW * 0.85 / (Math.max(r.name.length, 4) * 0.45), screenH * 0.3, 26);
+    const nameSize = Math.min(screenW * 0.85 / (Math.max(r.name.length, 4) * 0.55), screenH * 0.3, 26);
     if (nameSize >= 9) {
       const dimsSize = clamp(nameSize * 0.5, 9, 12);
       const showDims = screenH > nameSize + dimsSize * 2.5;

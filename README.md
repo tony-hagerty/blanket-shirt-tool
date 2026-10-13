@@ -1,6 +1,6 @@
 # Blanket Shirt Tool
 
-A web-based rectangle layout tool for designing quilt blocks, patchwork layouts, and other rectangular arrangements (mainly for t-shirts). Built with vanilla HTML, CSS, and JavaScript -- no frameworks or build step. Fonts (Instrument Serif and Inter) load from Google Fonts, with system fallbacks.
+A web-based rectangle layout tool for designing quilt blocks, patchwork layouts, and other rectangular arrangements (mainly for t-shirts). Built with vanilla HTML, CSS, and JavaScript -- no frameworks or build step. Fonts (Inter Tight and Inter) load from Google Fonts, with system fallbacks.
 
 ## Features
 
