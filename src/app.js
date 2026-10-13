@@ -54,12 +54,23 @@ function clamp(val, min, max) {
 }
 
 function getConstraints() {
+  // Blank, zero or negative limits fall back to the defaults
+  const read = (input, fallback) => Math.max(parseFloat(input.value), 0) || fallback;
   return {
-    minWidth: parseFloat(minWidthInput.value) || 1,
-    maxWidth: parseFloat(maxWidthInput.value) || 12,
-    minHeight: parseFloat(minHeightInput.value) || 1,
-    maxHeight: parseFloat(maxHeightInput.value) || 12,
+    minWidth: read(minWidthInput, 1),
+    maxWidth: read(maxWidthInput, 12),
+    minHeight: read(minHeightInput, 1),
+    maxHeight: read(maxHeightInput, 12),
   };
+}
+
+
+// Clamp a resized dimension to the limits, but widen the range to include
+// where it started. A piece that's already outside the limits (after a
+// rotate, or after the limits changed) then resizes smoothly instead of
+// snapping to the limit the moment it's touched.
+function clampResize(val, orig, min, max) {
+  return clamp(val, Math.min(min, orig), Math.max(max, orig));
 }
 
 function getNextColor() {
@@ -258,6 +269,7 @@ function renderList() {
     return;
   }
 
+  const constraints = getConstraints();
   const area = rectangles.reduce((sum, r) => sum + r.width * r.height, 0);
   summary.textContent = `${rectangles.length} · ${Math.round(area)} sq in`;
 
@@ -279,7 +291,22 @@ function renderList() {
     `;
     li.querySelector('.piece-swatch').style.background = r.color;
     li.querySelector('.piece-name').textContent = r.name;
-    li.querySelector('.piece-dims').textContent = formatDims(r);
+    // Highlight whichever side is outside the current size limits
+    const dims = li.querySelector('.piece-dims');
+    const side = (value, min, max) => {
+      const span = document.createElement('span');
+      span.textContent = `${value.toFixed(1)}″`;
+      if (value < min || value > max) {
+        span.className = 'outside';
+        span.title = `Outside the ${min}–${max}″ limit`;
+      }
+      return span;
+    };
+    dims.append(
+      side(r.width, constraints.minWidth, constraints.maxWidth),
+      ' × ',
+      side(r.height, constraints.minHeight, constraints.maxHeight),
+    );
     rectList.appendChild(li);
   });
 }
@@ -351,6 +378,11 @@ addForm.addEventListener('submit', (e) => {
   selectedId = rect.id;
   rectNameInput.value = '';
   render();
+});
+
+// Re-check which pieces are outside the limits as they're edited
+[minWidthInput, maxWidthInput, minHeightInput, maxHeightInput].forEach((input) => {
+  input.addEventListener('input', renderList);
 });
 
 // One listener for every row in the list
@@ -498,14 +530,14 @@ canvas.addEventListener('pointermove', (e) => {
   }
 
   // Resize: the opposite edge stays put
-  if (handle.includes('e')) rect.width = clamp(orig.width + dx, c.minWidth, c.maxWidth);
-  if (handle.includes('s')) rect.height = clamp(orig.height + dy, c.minHeight, c.maxHeight);
+  if (handle.includes('e')) rect.width = clampResize(orig.width + dx, orig.width, c.minWidth, c.maxWidth);
+  if (handle.includes('s')) rect.height = clampResize(orig.height + dy, orig.height, c.minHeight, c.maxHeight);
   if (handle.includes('w')) {
-    rect.width = clamp(orig.width - dx, c.minWidth, c.maxWidth);
+    rect.width = clampResize(orig.width - dx, orig.width, c.minWidth, c.maxWidth);
     rect.x = orig.x + orig.width - rect.width;
   }
   if (handle.includes('n')) {
-    rect.height = clamp(orig.height - dy, c.minHeight, c.maxHeight);
+    rect.height = clampResize(orig.height - dy, orig.height, c.minHeight, c.maxHeight);
     rect.y = orig.y + orig.height - rect.height;
   }
   render();
@@ -607,7 +639,8 @@ $('saveLayout').addEventListener('click', () => {
   a.href = url;
   a.download = 'layout.json';
   a.click();
-  URL.revokeObjectURL(url);
+  // Revoking right away can cancel the download on iOS Safari
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 });
 
 $('loadLayout').addEventListener('click', () => {
